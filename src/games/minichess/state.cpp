@@ -83,69 +83,64 @@ int State::evaluate(
     int self_score = 0, oppn_score = 0;
 
     if(use_kp_eval){
-        /* === KP eval: material + PST + tropism === */
+        /* === KP eval: Material + PST + Tropism (Simplified Safe Version) === */
+        int white_kr = -1, white_kc = -1;
+        int black_kr = -1, black_kc = -1;
+        int white_material = 0;
+        int black_material = 0;
 
-        int self_kr = -1, self_kc = -1;
-        int oppn_kr = -1, oppn_kc = -1;
-        // [ Hackathon TODO 1-3 ]
-        // get the position for player's king and opponent's king
-        //^^
-        int total_oppn_material = 0;
-        for(int i=0;i<BOARD_H;++i){
-            for(int j=0;j<BOARD_W;++j){
-                if(self_board[i][j] == 6){
-                    self_kr = i;
-                    self_kc = j;
-                }
+        auto white_board = this->board.board[0];
+        auto black_board = this->board.board[1];
 
-                if(oppn_board[i][j] == 6){
-                    oppn_kr = i;
-                    oppn_kc = j;
-                }
-
-                if(oppn_board[i][j]){
-                    total_oppn_material += kp_material[oppn_board[i][j]];
-                }
+        for(int i=0; i<BOARD_H; ++i){
+            for(int j=0; j<BOARD_W; ++j){
+                if(white_board[i][j] == 6) { white_kr = i; white_kc = j; }
+                if(black_board[i][j] == 6) { black_kr = i; black_kc = j; }
+                if(white_board[i][j]) { white_material += kp_material[white_board[i][j]]; }
+                if(black_board[i][j]) { black_material += kp_material[black_board[i][j]]; }
             }
         }
 
-        // [ Hackathon TODO 1-4 ]
-        // sum player/opponent pieces' value and add to score
-        // if enemy king is still on the board, you should also call king_tropism for your pieces and add the value to score
-        // king_tropism is already given above
+        int white_bonus = 0;
+        int black_bonus = 0;
 
-        for(int i=0;i<BOARD_H;++i){
-            for(int j=0;j<BOARD_W;++j){
-                if(self_board[i][j]){
-                    int type = self_board[i][j];
-                    self_score+=kp_material[type];
-                    self_score+=pst[type-1][i][j];
-
-                    // 💡 核心設計 2：開局前期的王車易位/護王傾向
-                    if(type == 6){
-                        // 如果對手大子還很多（開局/中局），且國王已經躲到底線兩側安全區
-                        if(total_oppn_material > 500){ 
-                            if(i == 5 && (j <= 1 || j >= 3)){
-                                self_score += 10; // 給予額外獎勵分，誘使 AI 前期主動尋求易位
-                            }
-                        }
+        for(int i=0; i<BOARD_H; ++i){
+            for(int j=0; j<BOARD_W; ++j){
+                // 
+                if(white_board[i][j]){
+                    int type = white_board[i][j];
+                    white_bonus += pst[type-1][i][j];
+                    if(type == 6 && black_material > 400){ 
+                        if(i == 5 && (j <= 1 || j >= 3)) white_bonus += 10;
                     }  
-                    
-                    if(oppn_kr != -1){
-                        self_score += king_tropism(type,i,j,oppn_kr,oppn_kc);
+                    if(black_kr != -1){
+                        white_bonus += king_tropism(type, i, j, black_kr, black_kc);
                     }
                 }
-                if(oppn_board[i][j]){
-                    int type = oppn_board[i][j];
-                    oppn_score+=kp_material[type];
-                    oppn_score+=pst[type-1][BOARD_H-i-1][BOARD_W-j-1];
-
-                    if(self_kr != -1){
-                        oppn_score += king_tropism(type,i,j,self_kr,self_kc);
+                
+                // 
+                if(black_board[i][j]){
+                    int type = black_board[i][j];
+                    black_bonus += pst[type-1][BOARD_H - 1 - i][j];
+                    if(type == 6 && white_material > 400){ 
+                        if(i == 0 && (j <= 1 || j >= 3)) black_bonus += 10;
+                    }  
+                    if(white_kr != -1){
+                        black_bonus += king_tropism(type, i, j, white_kr, white_kc);
                     }
                 } 
             }
         }
+
+        // ><
+        if (this->player == 0) { // 
+            self_score = white_material + white_bonus;
+            oppn_score = black_material + black_bonus;
+        } else { // 
+            self_score = black_material + black_bonus;
+            oppn_score = white_material + white_bonus;
+        }
+
         //^^
 
     }else{
