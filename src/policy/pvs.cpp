@@ -20,7 +20,7 @@ int PVS::quiescence(
         return 0;
     }
 
-    // 
+    //超過beta跳過
     int s = state->evaluate(true, true, nullptr);
     if(s >= beta){
         return beta;
@@ -37,11 +37,12 @@ int PVS::quiescence(
         int r = action.second.first; // 終點 (r,c)
         int c = action.second.second;
 
-        // 
+        // 沒得吃跳過
         if(state->board.board[0][r][c] == 0 && state->board.board[1][r][c] == 0){
             continue;
         }
 
+        //預走下一步
         State* nex = state->next_state(action);
         int same = nex->same_player_as_parent();
         int scor;
@@ -110,36 +111,26 @@ int PVS::eval_ctx(
         return score;
     }
 
-    // 
+    // 吃子優先 ^ ^
     struct ScoredAction {
         Move action;
         int w;
     };
-
     std::vector<ScoredAction> scored_actions;
     scored_actions.reserve(state->legal_actions.size());
-
     for(const auto& action : state->legal_actions){
         int w = 0;
         int r = action.second.first; 
         int c = action.second.second;
         if(state->board.board[0][r][c] != 0 || state->board.board[1][r][c] != 0){
-            w += 100; // 
+            w += 100;
         }
         if(r >= 2 && r <= 3 && c >= 2 && c <= 3){
-            w += 10;  // 
+            w += 10;
         }
         scored_actions.push_back({action, w});
     }
-
-    std::sort(
-        scored_actions.begin(),
-        scored_actions.end(),
-        [](const ScoredAction& a, const ScoredAction& b){
-            return a.w > b.w;
-        }
-    );
-    
+    std::sort(scored_actions.begin(), scored_actions.end(), [](const ScoredAction& a, const ScoredAction& b){ return a.w > b.w; });
     for(size_t i = 0; i < state->legal_actions.size(); ++i){
         state->legal_actions[i] = scored_actions[i].action;
     }
@@ -187,7 +178,7 @@ int PVS::eval_ctx(
             alpha = best_score;
         }
         if(alpha >= beta){
-            break; // 
+            break; 
         }
     }
 
@@ -222,15 +213,12 @@ SearchResult PVS::search(
         Move action;
         int w;
     };
-
     std::vector<RootMove> root_moves;
     root_moves.reserve(state->legal_actions.size());
-
     for(const auto& action : state->legal_actions){
         int w = 0;
         int r = action.second.first;
         int c = action.second.second;
-
         if(state->board.board[0][r][c] != 0 || state->board.board[1][r][c]){
             w += 100;
         }
@@ -239,20 +227,14 @@ SearchResult PVS::search(
         }
         root_moves.push_back({action, w});
     }
-
-    std::sort(
-        root_moves.begin(),
-        root_moves.end(),
-        [](const RootMove& a, const RootMove& b){
-            return a.w > b.w;
-        }
-    );
+    std::sort(root_moves.begin(), root_moves.end(), [](const RootMove& a, const RootMove& b){ return a.w > b.w; });
 
     // 
     int alpha = M_MAX;
     int beta = P_MAX;
     int move_index = 0;
     int total_moves = (int)root_moves.size();
+    bool is_fir = true;
 
     for(auto& action : root_moves){
         State* next = state->next_state(action.action);
@@ -260,10 +242,27 @@ SearchResult PVS::search(
         int score;
         
         // 
-        if(same){
-            score = eval_ctx(next, depth - 1, alpha, beta, history, 1, ctx, p);
+        if(is_fir){
+            if(same){
+                score = eval_ctx(next, depth - 1, alpha, beta, history, 1, ctx, p);
+            }else{
+                score = -eval_ctx(next, depth - 1, -beta, -alpha, history, 1, ctx, p);
+            }
+            is_fir = false;
         }else{
-            score = -eval_ctx(next, depth - 1, -beta, -alpha, history, 1, ctx, p);
+            if(same){
+                score = eval_ctx(next, depth - 1, alpha, alpha + 1, history, 1, ctx, p);
+            }else{
+                score = -eval_ctx(next, depth - 1, -alpha - 1, -alpha, history, 1, ctx, p);
+            }
+
+            if(score > alpha && score < beta){
+                if(same){
+                    score = eval_ctx(next, depth - 1, score, beta, history, 1, ctx, p);
+                }else{
+                    score = -eval_ctx(next, depth - 1, -beta, -score, history, 1, ctx, p);
+                }
+            }
         }
         
         delete next;
@@ -283,31 +282,21 @@ SearchResult PVS::search(
     result.seldepth = ctx.seldepth;
     result.nodes = ctx.nodes;
 
-
+    // 
     if (!state->legal_actions.empty()) {
-        
-        // 
         Move final_move = (result.best_move.first.first == 0 && result.best_move.first.second == 0 &&
                            result.best_move.second.first == 0 && result.best_move.second.second == 0) 
                            ? state->legal_actions[0] 
                            : result.best_move;
-
         auto from = final_move.first;
         auto to = final_move.second;
-
-        // 
         char from_col = 'a' + from.second;
         char to_col   = 'a' + to.second;
-
-        // 
         int from_row = 6 - from.first;
         int to_row   = 6 - to.first;
-
-        // 
         std::cout << "bestmove " << from_col << from_row << to_col << to_row << std::endl;
         std::flush(std::cout);
     } else {
-        // 
         std::cout << "bestmove 0000" << std::endl;
         std::flush(std::cout);
     }
